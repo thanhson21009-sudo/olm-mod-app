@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>OLM PREMIUM - GHOST APP</title>
+    <style>
+        /* Giao diện nền của App */
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: #1a1a1a; }
+        
+        /* Khung hiển thị OLM */
+        #olm-frame {
+            border: none;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        /* Hiệu ứng loading khi chờ App khởi động */
+        #loading-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 1000001;
+            color: #7c3aed; font-family: sans-serif; transition: opacity 0.5s;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 5px solid #333;
+            border-top: 5px solid #7c3aed; border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 15px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <div style="font-weight: bold; letter-spacing: 2px;">GHOST ENGINE INITIALIZING...</div>
+    </div>
+
+    <iframe src="https://olm.vn" id="olm-frame"></iframe>
+
+    <script>
+        const frame = document.getElementById('olm-frame');
+        const loader = document.getElementById('loading-screen');
+
+        // Hàm tiêm code hack của Sơn vào lõi OLM
+        function injectGhostEngine() {
+            try {
+                const frameDoc = frame.contentDocument || frame.contentWindow.document;
+                const script = frameDoc.createElement('script');
+                
+                // DÁN CODE HACK CỦA BẠN VÀO ĐÂY (ĐÃ LƯỢC BỎ USER-SCRIPT)
+                script.innerHTML = `
+                    (function() {
+                        'use strict';
+                        console.log("OLM PREMIUM App Mode Activated!");
+
+                        const HOOK_CODE = \`(() => {
+                          if (window.__olmHooked) return; window.__olmHooked = true;
+                          const tryParseJSON = (text) => { try { return JSON.parse(text); } catch { return null; } };
+                          const looksLikeBase64 = (s) => typeof s === 'string' && s.length > 16 && /^[A-Za-z0-9+/=]+$/.test(s);
+                          const collectContents = (obj, out) => {
+                            if (!obj) return;
+                            if (Array.isArray(obj)) { for (const it of obj) collectContents(it, out); return; }
+                            if (typeof obj === 'object') {
+                              for (const [k, v] of Object.entries(obj)) {
+                                if (k === 'content' && looksLikeBase64(v)) out.push(v);
+                                collectContents(v, out);
+                              }
+                            }
+                          };
+                          const postIfHasContents = (meta, text) => {
+                            const json = tryParseJSON(text); if (!json) return;
+                            const contents = []; collectContents(json, contents);
+                            if (contents.length) window.postMessage({ type: 'OLM_SNIF_CONTENTS', meta, contents }, '*');
+                          };
+                          (() => {
+                            const origOpen = XMLHttpRequest.prototype.open;
+                            const origSend = XMLHttpRequest.prototype.send;
+                            XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                              this.__olm = { method, url };
+                              try { this.addEventListener('load', () => postIfHasContents(this.__olm, this.responseText || '')); } catch {}
+                              return origOpen.call(this, method, url, ...rest);
+                            };
+                            XMLHttpRequest.prototype.send = function(body) { return origSend.call(this, body); };
+                          })();
+                          (() => {
+                            const origFetch = window.fetch;
+                            window.fetch = function(input, init) {
+                                const p = origFetch(input, init);
+                                p.then(r => { try { r.clone().text().then(t => postIfHasContents({}, t)); } catch {} });
+                                return p;
+                            };
+                          })();
+                        })();\`;
+
+                        const inject = () => {
+                            const s = document.createElement('script');
+                            s.textContent = HOOK_CODE;
+                            (document.head || document.documentElement).appendChild(s);
+                            s.remove();
+                        };
+                        inject();
+
+                        const state = { isVisible: false, items: [] };
+
+                        const ui = {
+                            el: {},
+                            setupDragAndResize() {
+                                let isDragging = false, offset = { x: 0, y: 0 };
+                                const startDrag = (e) => {
+                                    if (e.target.closest('button') || e.target.closest('#olm-answers-content') || e.target.classList.contains('resizer-handle')) return;
+                                    isDragging = true;
+                                    const touch = e.type === 'touchstart' ? e.touches[0] : e;
+                                    const rect = this.el.panel.getBoundingClientRect();
+                                    offset.x = touch.clientX - rect.left; offset.y = touch.clientY - rect.top;
+                                    const onMove = (me) => {
+                                        if (!isDragging) return;
+                                        const mt = me.type === 'touchmove' ? me.touches[0] : me;
+                                        this.el.panel.style.left = (mt.clientX - offset.x) + 'px';
+                                        this.el.panel.style.top = (mt.clientY - offset.y) + 'px';
+                                        this.el.panel.style.right = 'auto';
+                                        if (me.cancelable) me.preventDefault();
+                                    };
+                                    const onUp = () => { isDragging = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onUp); };
+                                    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+                                    document.addEventListener('touchmove', onMove, { passive: false }); document.addEventListener('touchend', onUp);
+                                };
+                                this.el.header.addEventListener('mousedown', startDrag);
+                                this.el.header.addEventListener('touchstart', startDrag, { passive: false });
+
+                                let isResizing = false;
+                                const startResize = (e) => {
+                                    isResizing = true;
+                                    const touch = e.type === 'touchstart' ? e.touches[0] : e;
+                                    let startW = this.el.panel.offsetWidth, startH = this.el.panel.offsetHeight;
+                                    let startX = touch.clientX, startY = touch.clientY;
+                                    const onMove = (me) => {
+                                        if (!isResizing) return;
+                                        const mt = me.type === 'touchmove' ? me.touches[0] : me;
+                                        this.el.panel.style.width = (startW + mt.clientX - startX) + 'px';
+                                        this.el.panel.style.height = (startH + mt.clientY - startY) + 'px';
+                                        if (me.cancelable) me.preventDefault();
+                                    };
+                                    const onUp = () => { isResizing = false; };
+                                    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+                                    document.addEventListener('touchmove', onMove, { passive: false }); document.addEventListener('touchend', onUp);
+                                    e.stopPropagation();
+                                };
+                                this.el.resizer.addEventListener('mousedown', startResize);
+                                this.el.resizer.addEventListener('touchstart', startResize, { passive: false });
+                            },
+
+                            init() {
+                                const style = document.createElement('style');
+                                style.textContent = \`
+                                    .question-item, .quiz-item, .card { border-radius: 25px !important; box-shadow: 10px 10px 20px rgba(0,0,0,0.05) !important; border: none !important; }
+                                    #olm-logo-trigger { position: fixed; bottom: 85px; right: 25px; width: 60px; height: 60px; background: url('https://olm.vn/images/logo/logo_olm.png') no-repeat center; background-size: 80%; background-color: white; border-radius: 20px; z-index: 1000000; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border: 1px solid rgba(0,0,0,0.05); transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); backdrop-filter: blur(10px); }
+                                    #olm-answers-container { position: fixed; top: 50px; left: 20px; width: 90%; max-width: 400px; height: 450px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(25px) saturate(180%); border-radius: 35px; z-index: 999999; display: none; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.2); overflow: hidden; touch-action: none; border: 1px solid rgba(255,255,255,0.4); }
+                                    .olm-answers-header { padding: 15px; cursor: move; text-align: center; font-weight: 900; color: #7c3aed; font-size: 16px; background: rgba(255, 255, 255, 0.2); }
+                                    #olm-answers-content { flex: 1; overflow-y: auto; padding: 15px; }
+                                    .olm-item { background: rgba(255, 255, 255, 0.8); border-radius: 20px; padding: 15px; margin-bottom: 15px; border: 1px solid white; }
+                                    .fill-answer, .correctAnswer { color: #9333ea !important; font-weight: 800 !important; background: rgba(147, 51, 234, 0.1); padding: 2px 8px; border-radius: 8px; }
+                                    #olm-dl-word { background: linear-gradient(135deg, #7c3aed, #d946ef); color: white; border: none; padding: 12px; border-radius: 15px; font-weight: bold; width: 100%; }
+                                    .resizer-handle { position: absolute; bottom: 0; right: 0; width: 30px; height: 30px; cursor: nwse-resize; }
+                                \`;
+                                document.head.appendChild(style);
+
+                                const trigger = document.createElement('div');
+                                trigger.id = 'olm-logo-trigger';
+                                document.body.appendChild(trigger);
+
+                                const panel = document.createElement('div');
+                                panel.id = 'olm-answers-container';
+                                panel.innerHTML = \`
+                                    <div class="olm-answers-header">OLM GHOST APP</div>
+                                    <div id="olm-answers-content">Đang quét dữ liệu...</div>
+                                    <div style="padding:15px;"><button id="olm-dl-word">XUẤT WORD</button></div>
+                                    <div class="resizer-handle"></div>
+                                \`;
+                                document.body.appendChild(panel);
+
+                                this.el = { panel, trigger, header: panel.querySelector('.olm-answers-header'), body: panel.querySelector('#olm-answers-content'), resizer: panel.querySelector('.resizer-handle') };
+
+                                trigger.onclick = () => {
+                                    state.isVisible = !state.isVisible;
+                                    panel.style.display = state.isVisible ? 'flex' : 'none';
+                                };
+                                this.setupDragAndResize();
+                            },
+                            update() {
+                                if (!state.items.length) return;
+                                this.el.body.innerHTML = state.items.map((html, i) => \`
+                                    <div class="olm-item">
+                                        <div style="font-size:10px; font-weight:bold; color:#7c3aed; margin-bottom:5px;">CÂU \${i+1}</div>
+                                        <div>\${html.replace(/input/g, 'span class="fill-answer"')}</div>
+                                    </div>
+                                \`).join('');
+                            }
+                        };
+
+                        window.addEventListener('message', (ev) => {
+                            if (ev.data.type === 'OLM_SNIF_CONTENTS') {
+                                const decoded = ev.data.contents.map(c => {
+                                    try { return decodeURIComponent(escape(atob(c))); } catch { return null; }
+                                }).filter(Boolean);
+                                state.items.push(...decoded);
+                                ui.update();
+                            }
+                        });
+                        ui.init();
+                    })();
+                `;
+                
+                frameDoc.body.appendChild(script);
+                console.log("Ghost Engine: Injection Successful.");
+                
+                // Ẩn màn hình loading sau khi tiêm xong
+                setTimeout(() => { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 500); }, 1000);
+            } catch (e) {
+                console.warn("Ghost Engine: Waiting for server response...");
+            }
+        }
+
+        // Tự động tiêm khi OLM vừa hiện hình
+        frame.onload = injectGhostEngine;
+    </script>
+</body>
+</html>
