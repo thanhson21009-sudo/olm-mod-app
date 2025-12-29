@@ -1,6 +1,7 @@
 {
   "name": "My Web App",
   "short_name": "MyApp",
+  "description": "Ứng dụng web chuyển thành app iOS bằng PWABuilder",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
